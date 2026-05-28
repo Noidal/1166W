@@ -1,4 +1,6 @@
-#include "profiling.h"
+#ifndef _
+
+#include "profile.h"
 
 MotionProfile::MotionProfile(CubicHermiteSpline* path, double maxSpeed, std::vector<std::vector<Point>> zonePoints) {
     // assigns the passed-in values to instance variables

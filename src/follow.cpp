@@ -1,4 +1,4 @@
-#include "profiling.h"
+#include "follow.h"
 
 VelocityController::VelocityController(PowerUnit* xOutput, PowerUnit* yOutput, PowerUnit* thetaOutput, PoseTracker* globalPos, PIDSet corrector) {
     this->xOutput = xOutput;
@@ -7,15 +7,6 @@ VelocityController::VelocityController(PowerUnit* xOutput, PowerUnit* yOutput, P
     this->corrector = corrector;
     this->globalPos = globalPos;
     this->willCorrect = (corrector.x != NULL) && (corrector.y != NULL) && (corrector.thetaL90 != NULL) && (corrector.thetaG90 != NULL);
-}
-
-// calculates the linear travel of a single degree of movement for a wheel of a given diameter
-double VelocityController::calculateSingleDegree(double wheelDiameter) {
-    // sets up the odometry to convert angle readings to cm
-    double wheelCircumference = M_PI * wheelDiameter; // 2 is the pre-measured wheel diameter in inches
-	long double singleDegree = wheelCircumference / 360; // the distance that the robot moves in one degree of rotation of its wheels
-
-    return singleDegree;
 }
 
 // (private)

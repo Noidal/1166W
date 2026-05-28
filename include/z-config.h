@@ -6,123 +6,177 @@
 #include "interface.h"
 #include "odom.h"
 #include "pid.h"
-#include "profiling.h"
+#include "spline.h"
+#include "follow.h"
+#include "profile.h"
 #include "kalman.h"
 #include "math.h"
 #include "mcl.h"
+
+// MASON SCHEME
+#define FB_INPUT pros::E_CONTROLLER_ANALOG_RIGHT_Y
+#define ROT_INPUT pros::E_CONTROLLER_ANALOG_LEFT_X
+
+#define INTAKE_ALL_IN pros::E_CONTROLLER_DIGITAL_R2
+#define INTAKE_ALL_OUT pros::E_CONTROLLER_DIGITAL_L1
+#define INTAKE_HOLD pros::E_CONTROLLER_DIGITAL_L2
+#define INTAKE_DROP pros::E_CONTROLLER_DIGITAL_R1
+
+#define LOADER_TOGGLE pros::E_CONTROLLER_DIGITAL_Y
+#define RAMP_TOGGLE pros::E_CONTROLLER_DIGITAL_RIGHT
+#define COLOR_TOGGLE pros::E_CONTROLLER_DIGITAL_A
+#define FINGER_TOGGLE pros::E_CONTROLLER_DIGITAL_B
+
+
+// autonnumber key goes here
+int autonnumber = 0;
+
+// variant key goes here
+int variant = 0;
+
+// all possible start positions go here
+Pose startPose = {0, 0, 0};
+
+ConstantContainer fbConstants = {4, 0.1, 2.7};
+ConstantContainer thetaConstantsSub90 = {1.05, 0.15, 8};
+ConstantContainer thetaConstantsAbove90 = {0.7, 0.1, 32};
+
+double fbTol = 1;
+double thetaTolSub90 = 2.5;
+double thetaTolAbove90 = 3.5;
+
+#define FRONT_LEFT -18
+#define BACK_LEFT -17
+#define HALF_LEFT 20
+
+#define FRONT_RIGHT 8
+#define BACK_RIGHT 9
+#define HALF_RIGHT -19
+
+// #define intake
+
+#define PARA_ODOM 10
+#define PERP_ODOM 5
+
+#define FRONT_DIST 99
+#define RIGHT_DIST 99
+#define LEFT_DIST 99
+
+#define INERTIAL_A 16
+#define INERTIAL_B 7
+
+#define COLOR 10
+
+// #define pistons
+
+#define ODOM_DIAMETER 2
 
 // Controllers
     pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 // Motors
-    // Mecanum Drivetrain
+    // Differential Drivetrain
+        pros::Motor frontLeft(FRONT_LEFT, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
+        pros::Motor backLeft(BACK_LEFT, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
+        pros::Motor halfLeft(HALF_LEFT, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
+
+        pros::Motor frontRight(FRONT_RIGHT, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
+        pros::Motor backRight(BACK_RIGHT, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
+        pros::Motor halfRight(HALF_RIGHT, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
         
-        pros::Motor topLeft6(-6, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor topLeft2(-7, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-
-        pros::Motor bottomLeft6(-8,pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor bottomLeft2(-9, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-
-        pros::Motor topRight6(1, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor topRight2(2, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-
-        pros::Motor bottomRight6(3, pros::v5::MotorGears::blue, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor bottomRight2(4, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-        
-    // Intake
-        pros::Motor input(18, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor storage(17, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
-        pros::Motor output(19, pros::v5::MotorGears::green, pros::v5::MotorEncoderUnits::degrees);
+    // Intake Motors
 
     // Sensors
-        /* pros::Rotation parallelLeftOdom(12);
-        pros::Rotation parallelRightOdom(13); */
-        // pros::Rotation perpOdom(11);
+        pros::Rotation parallelTrack(PARA_ODOM);
+        pros::Rotation perpTrack(PERP_ODOM);
 
-        pros::Distance front(12);
-        pros::Distance back(11);
-        pros::Distance right(13);
+        pros::Distance front(FRONT_DIST);
+        pros::Distance left(LEFT_DIST);
+        pros::Distance right(RIGHT_DIST);
 
-        pros::IMU inertial1(14);
-        pros::IMU inertial2(15);
+        pros::IMU inertial1(INERTIAL_A);
+        pros::IMU inertial2(INERTIAL_B);
 
-        pros::Optical color(20);
+        pros::Optical color(COLOR);
 
     // Three-Wire Devices
-        pros::adi::DigitalOut unloader(8);
-        pros::adi::DigitalOut aligner(1);
-        pros::adi::DigitalOut descorer(2);
+        
 
 // Program Module Initialization
 
-    // DiffChassis chassis = DiffChassis({&topLeft6, &topLeft2, &bottomLeft6, &bottomLeft2}, {&topRight6, &topRight2, &bottomRight6, &bottomRight2});
+    DiffChassis chassis = DiffChassis({&frontLeft, &backLeft, &halfLeft}, {&frontRight, &backRight, &halfRight}, FB_INPUT, ROT_INPUT);
 
-    /* OdomPod leftOdom(&parallelLeftOdom, 2);
-    OdomPod rightOdom(&parallelRightOdom, 2);
+    OdomPod mainOdom(&parallelTrack, ODOM_DIAMETER);
     TrackingSensor fbTrack(
         []() -> double {
-            return ((leftOdom.measure() + rightOdom.measure()) / 2);
+            return mainOdom.measure();
         },
         [](double val) {
-            parallelLeftOdom.set_position(val);
-            parallelRightOdom.set_position(val);
+            parallelTrack.set_position(val);
             return;
         },
         []() {
-            parallelLeftOdom.reset_position();
-            parallelRightOdom.reset_position();
+            parallelTrack.reset_position();
             return;
         }
     );
-    /* 
-    TrackingSensor angVelTracker(
+    double distAtLastReset = 0;
+    TrackingSensor PIDfbTrack(
         []() -> double {
-            return ((leftOdom.measureVelocity() - rightOdom.measureVelocity()) / 5);
+            return mainOdom.measure() - distAtLastReset;
+        },
+        [](double val) {
+            return;
+        },
+        []() {
+            distAtLastReset = mainOdom.measure() / 2;
+            return;
         }
-    ); */
+    );
     TrackingSensor angVelTracker(
         []() -> double {
-            return 0.0001;
+            return (mainOdom.measureVelocity() / 5);
         }
     );
 
-    /*OdomPod perpendicularOdom = OdomPod(&perpOdom, 2);
+    OdomPod perpendicularOdom = OdomPod(&perpTrack, ODOM_DIAMETER);
     TrackingSensor lrTrack(
         []() -> double {
             return perpendicularOdom.measure();
         },
         [](double val) {
-            perpOdom.set_position(val);
+            perpTrack.set_position(val);
             return;
         },
         []() {
-            perpOdom.reset_position();
+            perpTrack.reset_position();
             return;
         }
-    );*/
+    );
 
     KalmanFilter Kalman1 = KalmanFilter(&inertial1, angVelTracker);
     KalmanFilter Kalman2 = KalmanFilter(&inertial2, angVelTracker);
 
     TrackingSensor headingTracker(
         []() -> double {
-            return getAggregatedHeading(Kalman1, Kalman2);
+            return inertial1.get_heading();
         }
     );
 
     double distFromLastReset = 0;
-    double lastHeading = 90;
-    TrackingSensor RelativePIDHeadingTracker(
+    double lastResetHead = 0;
+    double lastHeading = startPose.heading;
+    TrackingSensor PIDHeadingTracker(
         []() -> double {
-            double changeInHeading = getAggregatedHeading(Kalman1, Kalman2) - lastHeading;
+            double changeInHeading = inertial1.get_heading() - lastHeading;
             if (changeInHeading > 315) {
                 changeInHeading -= 360;
             } else if (changeInHeading < -315) {
                 changeInHeading += 360;
             }
             distFromLastReset += changeInHeading;
-            lastHeading = getAggregatedHeading(Kalman1, Kalman2);
-            std::cout << "pidhead: " << distFromLastReset << "\n\n";
+            lastHeading = inertial1.get_heading();
+
             return distFromLastReset;
         },
         [](double val) {
@@ -130,46 +184,20 @@
         },
         []() {
             distFromLastReset = 0;
+            lastResetHead = inertial1.get_heading();
+            lastHeading = inertial1.get_heading();
             return;
         }
     );
 
-    // Pose startPose = {0, 0, 0};
+    Odometry odom(fbTrack, headingTracker, startPose);
 
-    // Odometry odom(fbTrack, headingTracker, startPose);
-
-    ConstantContainer fbConstants = {4, 0.1, 2.7};
-    ConstantContainer thetaConstantsSub90 = {3, 0.2, 26};
-    ConstantContainer thetaConstantsAbove90 = {2.3, 0.24, 32};
-
-    double fbTol = 1;
-    double thetaTolSub90 = 2.5;
-    double thetaTolAbove90 = 3.5;
+    PIDController fbPID(PIDfbTrack, fbConstants, chassis.m_fbOutputCorrect, fbTol);
+    PIDController thetaPIDSub90(PIDHeadingTracker, thetaConstantsSub90, chassis.m_thetaOutputCorrect, thetaTolSub90);
+    PIDController thetaPIDAbove90(PIDHeadingTracker, thetaConstantsAbove90, chassis.m_thetaOutputCorrect, thetaTolAbove90);
 
     // PIDSet robotPIDs(&xPID, &yPID, &thetaPIDSub90, &thetaPIDAbove90);
-    // PoseTracker currentPose(&odom);
-
-    /*
-    TrackingSensor frontDistance(
-        []() -> double {
-            double val = front.get();
-            return val == 9999 ? -1 : (val / 10) / 2.54;
-        }
-    );
-
-    TrackingSensor leftDistance(
-        []() -> double {
-            double val = left.get();
-            return val == 9999 ? -1 : (val / 10) / 2.54;
-        }
-    );
-
-    TrackingSensor rightDistance(
-        []() -> double {
-            double val = right.get();
-            return val == 9999 ? -1 : (val / 10) / 2.54;
-        }
-    );*/
+    PoseTracker currentPose(&odom);
 
     TrackingSensor linAngleTracker(
         []() -> double {
@@ -178,93 +206,13 @@
         }
     );
 
-    TrackingSensor linAngleTrackerV2(
-        []() -> double {
-            double offsetFromHeading = chassis.m_lAng.get() < 180 ? chassis.m_lAng.get() : chassis.m_lAng.get() - 360;
-            return offsetFromHeading;
-        }
-    );
+    HeadingPIDSelector thetaPID = {&thetaPIDSub90, &thetaPIDSub90, 100};
+
+    void manualTurn(double heading, double range) {
+        waitUntil((inertial2.get_heading() > heading - (range / 2)) && (inertial2.get_heading() < heading + (range / 2)));
+    }
+
 
     // VelocityController follower(&chassis.m_xOutput, &chassis.m_yOutput, &chassis.m_thetaOutput, &currentPose, robotPIDs);
-
-    /* ParticleFilter mcl(frontDistance, leftDistance, rightDistance, headingTracker, 
-                       chassis.m_lVel, linAngleTrackerV2, chassis.m_aVel, 
-                       {{-4, 7.5}, {-7.5, 0}, {7.5, 0}}, {0, -90, 90},
-                       {40, -24, 0});
-
-    Pose mclResetPose = {0, 0, 0};
-    TrackingSensor mclFBTrack(
-        []() -> double {
-            Point change = {mcl.getBestParticle().x - mclResetPose.x, mcl.getBestParticle().y - mclResetPose.y};
-            double linChange = (std::cos((M_PI / 180) * mclResetPose.heading) * change.x) + (std::sin((M_PI / 180) * mclResetPose.heading) * change.y);
-            return linChange;
-        },
-        [](double val) {},
-        []() {
-            mclResetPose = {mcl.getBestParticle().x, mcl.getBestParticle().y, headingTracker.get()};
-        }
-    ); */
-    double fVal = 0;
-    double bVal = 0;
-
-    TrackingSensor fSensor(
-        []() -> double {
-            return (front.get() * 0.03937008) - fVal;
-        },
-        [](double val) {},
-        []() {
-            fVal = front.get() * 0.03937008;
-        }
-    );
-    TrackingSensor bSensor(
-        []() -> double {
-            return (back.get()  * 0.03937008) - bVal;
-        },
-        [](double val) {},
-        []() {
-            bVal = back.get() * 0.03937008;
-        }
-    );
-
-    PowerUnit flipper(
-        [](double in) {
-            chassis.m_fbOutputCorrect.move(-in);
-        },
-        []() {
-            chassis.m_fbOutputCorrect.stop();
-        }
-    );
-
-
-    PIDController fPID(fSensor, fbConstants, flipper, fbTol);
-    PIDController bPID(bSensor, fbConstants, chassis.m_fbOutputCorrect, fbTol);
-
-    PIDController thetaPIDSub90(RelativePIDHeadingTracker, thetaConstantsSub90, chassis.m_thetaOutputCorrect, thetaTolSub90);
-    PIDController thetaPIDAbove90(RelativePIDHeadingTracker, thetaConstantsAbove90, chassis.m_thetaOutputCorrect, thetaTolAbove90);
-
-    struct WhichPID {
-        PIDController* operator()(double heading) {
-            if (std::abs(heading) < cutoff) {
-                return below;
-            } else {
-                return above;
-            }
-        }
-        PIDController* below;
-        PIDController* above;
-        int cutoff;
-    };
-
-    WhichPID thetaPID = {&thetaPIDSub90, &thetaPIDAbove90, 90};
-
-    double makeRelative(double heading) {
-        int dir = std::signbit(heading) ? -1 : 1;
-        
-        heading = std::abs(heading) - headingTracker.get();
-        if (heading < 0) {heading += 360;}
-        if (dir < 0) {heading = -1 * (360 - heading);}
-
-        return heading;
-    }
 
 #endif

@@ -5,15 +5,6 @@ OdomPod::OdomPod(pros::Rotation* odom, double wheelDiameter) {
     m_diameter = wheelDiameter;
 }
 
-double calculateSingleDegree(double wheelDiameter) {
-    // sets up the odometry to convert angle readings to cm
-    double wheelCircumference = M_PI * wheelDiameter; // 2 is the pre-measured wheel diameter in inches
-	long double singleDegree = wheelCircumference / 360; // the distance that the robot moves in one degree of rotation of its wheels
-
-    return singleDegree;
-}
-
-
 double OdomPod::measure(void) {
     // gets the centimeter distance moved in a single degree of rotation
     double singleDegree = calculateSingleDegree(m_diameter); // 2 is the pre-measured wheel diameter in inches (may need to be changed for precision)

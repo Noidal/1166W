@@ -1,4 +1,4 @@
-#include "profiling.h"
+#include "spline.h"
 
 CubicHermiteSpline::CubicHermiteSpline(Point startPos, Point startV, Point endPos, Point endV) {
     this->startPos = startPos;
@@ -6,7 +6,7 @@ CubicHermiteSpline::CubicHermiteSpline(Point startPos, Point startV, Point endPo
     this->endPos = endPos;
     this->endV = {endV.x - endPos.x, endV.y - endPos.y};
 
-    this->findFunction();
+    this->createFunction();
     this->findDerivative();
     this->findSecondDerivative();
 }
@@ -51,28 +51,21 @@ Pose CubicHermiteSpline::findPose(double t, double step) {
     return currentP;
 }
 
-UltraPose CubicHermiteSpline::findUltraPose(double t, double step) {
-    Pose currentP = this->findPose(t, step);
-    UltraPose currentUltraP = {currentP.x, currentP.y, currentP.heading, this->calculateCurvature(t)};
-
-    return currentUltraP;
-}
-
-std::vector<UltraPose> CubicHermiteSpline::entirePath(double numPoints) {
-    UltraPose currentPose;
-    std::vector<UltraPose> fullPath;
+std::vector<PoseC> CubicHermiteSpline::entirePath(double numPoints) {
+    PoseC currentPoseC;
+    std::vector<PoseC> fullPath;
     
     double step = 1 / numPoints;
 
     for (double t = 0; t < 1; t += step) {
-        currentPose = {this->findPose(t, step).x, this->findPose(t, step).y, this->findPose(t, step).heading, this->calculateCurvature(t)};
-        fullPath.push_back(currentPose);
+        currentPoseC = {this->findPose(t, step).x, this->findPose(t, step).y, this->findPose(t, step).heading, this->calculateCurvature(t)};
+        fullPath.push_back(currentPoseC);
     }
 
     return fullPath;
 }
 
-void CubicHermiteSpline::findFunction(void) {
+void CubicHermiteSpline::createFunction(void) {
 
     // x function
         double coef1 = 2 * startPos.x; // t^3 term
