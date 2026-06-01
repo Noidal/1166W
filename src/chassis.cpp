@@ -357,6 +357,9 @@ void DiffChassis::move() {
     for (int i = 0; i < m_right.size(); i++) {
         m_right[i]->move((m_fbPower + m_fbCorrect) - (m_thetaPower + m_thetaCorrect));
     }
+
+    std::cout << "left: " << (m_fbPower + m_fbCorrect) + (m_thetaPower + m_thetaCorrect) << "\n";
+    std::cout << "right: " << (m_fbPower + m_fbCorrect) - (m_thetaPower + m_thetaCorrect) << "\n\n";
 }
 
 void DiffChassis::move_relative(double distance, int speed, bool nonblocking) {
@@ -391,16 +394,17 @@ void DiffChassis::driverControl(pros::Controller controller, double dz) {
     this->continuousPower(false, true);
     m_fbPower = controller.get_analog(m_fbIn);
     m_thetaPower = controller.get_analog(m_rotIn);
+
     if ((m_fbPower < dz) && (m_fbPower > -dz)) {
         m_fbPower = 0;
     } else {
-        m_fbPower -= 15;
+        (m_fbPower > 0) ? m_fbPower -= 15 : m_fbPower += 15;
         m_fbPower *= 1.13;
     }
     if ((m_thetaPower < dz) && (m_thetaPower > -dz)) {
         m_thetaPower = 0;
     } else {
-        m_thetaPower -= 15;
+        (m_fbPower > 0) ? m_fbPower -= 15 : m_fbPower += 15;
         m_thetaPower *= 1.13;
     }
 }

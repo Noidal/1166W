@@ -47,11 +47,11 @@ double thetaTolAbove90 = 3.5;
 
 #define FRONT_LEFT -18
 #define BACK_LEFT -17
-#define HALF_LEFT 20
+#define HALF_LEFT -20
 
 #define FRONT_RIGHT 8
 #define BACK_RIGHT 9
-#define HALF_RIGHT -19
+#define HALF_RIGHT 19
 
 // #define intake
 
