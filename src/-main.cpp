@@ -15,7 +15,6 @@ void initialize() {
     // Kalman2.startFilter();
 	
 	odom.updateLoop();
-	chassis.addPID(&fbPID, &thetaPID);
 	// mcl.start();
 	color.set_led_pwm(100);
 	master.print(0, 0, "Initialized!");
@@ -52,7 +51,7 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
-	chassis.continuousPower(true, false);
+	chassis.powerAccess(false, true, false);
 	chassis.brakeMode(pros::v5::MotorBrake::hold);
 
 //hif
@@ -86,7 +85,7 @@ void autonomous() {
 void opcontrol() {
 	master.rumble("-.-");
 
-	chassis.continuousPower(false, true);
+	chassis.powerAccess(true, false, false);
 	chassis.brake();
 	chassis.brakeMode(pros::v5::MotorBrake::coast);
 

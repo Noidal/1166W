@@ -308,28 +308,6 @@ double unfixAngle(
     return unfixedAngle;
 }
 
-double RPMtoIPS(double rpm) {
-    // Global Values
-    double g_gearRatio6 = 0.8;
-    double g_gearRatio2 = 3;
-    double g_maxRPM = 480;
-    double g_diameter = 4;
-    double g_distBetweenWheels = 7.5;
-    
-    return (rpm * g_gearRatio6 * (M_PI * g_diameter)) / 60;
-}
-
-double IPStoRPM(double ips) {
-    // Global Values
-    double g_gearRatio6 = 0.8;
-    double g_gearRatio2 = 3;
-    double g_maxRPM = 480;
-    double g_diameter = 4;
-    double g_distBetweenWheels = 7.5;
-
-    return (ips / (M_PI * g_diameter) / g_gearRatio6) * 60;
-}
-
 double bind180(double heading) {
     if (heading < -180) {heading += 360;}
     if (heading > 180) {heading -= 360;}

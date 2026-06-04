@@ -79,7 +79,7 @@ class DiffChassis {
         void brake(void);
         void brakeMode(pros::MotorBrake type);
         void driverControl(pros::Controller controller, double dz);
-        void continuousPower(bool pidStatus, bool manStatus);
+        void powerAccess(bool driver, bool auton, bool lr);
         void moveToPoint(Pose current, Point goal, bool turn = true, bool nonblocking = false, bool reverse = false);
         void enablePID(void);
 
@@ -89,11 +89,14 @@ class DiffChassis {
         pros::controller_analog_e_t m_fbIn;
         pros::controller_analog_e_t m_rotIn;
 
-        PowerUnit m_fbOutput;
-        PowerUnit m_fbOutputCorrect;
+        PowerUnit m_fbDriverIn;
+        PowerUnit m_fbAutoIn;
 
-        PowerUnit m_thetaOutput;
-        PowerUnit m_thetaOutputCorrect;
+        PowerUnit m_thetaDriverIn;
+        PowerUnit m_thetaAutoIn;
+
+        PowerUnit m_directLeftIn;
+        PowerUnit m_directRightIn;
 
         TrackingSensor m_lVel;
         TrackingSensor m_lAng;
@@ -103,19 +106,23 @@ class DiffChassis {
         std::vector<pros::Motor*> m_left;
         std::vector<pros::Motor*> m_right;
 
-        double m_fbPower;
-        double m_fbCorrect;
+        double m_fbDriver;
+        double m_fbAuto;
 
-        double m_thetaPower;
-        double m_thetaCorrect;
+        double m_thetaDriver;
+        double m_thetaAuto;
+
+        double m_directLeft;
+        double m_directRight;
 
         PIDController* m_fbPID;
         HeadingPIDSelector* m_thetaPID;
         bool m_hasPID;
 
         pros::Mutex chassisLock;
-        bool pidStatus;
-        bool manStatus;
+        bool driverEnabled;
+        bool autoEnabled;
+        bool lrEnabled;
         pros::Task* chassisTask;
 };
 

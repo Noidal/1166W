@@ -36,10 +36,10 @@ HoloChassis::HoloChassis(std::vector<pros::Motor*> FL, std::vector<pros::Motor*>
 
     m_lVel = TrackingSensor(
         [this]() -> double {
-            double xrpmSpeed = (480 / 128) * (m_xPower + m_xCorrect);
+            double xrpmSpeed = (480.0 / 128) * (m_xPower + m_xCorrect);
             double xipsSpeed = RPMtoIPS(xrpmSpeed);
 
-            double yrpmSpeed = (480 / 128) * (m_yPower + m_yCorrect);
+            double yrpmSpeed = (480.0 / 128) * (m_yPower + m_yCorrect);
             double yipsSpeed = RPMtoIPS(yrpmSpeed);
 
             //std::cout << "lv: " << std::sqrt(std::pow(xipsSpeed, 2) + std::pow(yipsSpeed, 2)) << "\n";
@@ -55,10 +55,10 @@ HoloChassis::HoloChassis(std::vector<pros::Motor*> FL, std::vector<pros::Motor*>
     );
     m_lAng = TrackingSensor(
         [this]() -> double {
-            double xrpmSpeed = (480 / 128) * (m_xPower + m_xCorrect);
+            double xrpmSpeed = (480.0 / 128) * (m_xPower + m_xCorrect);
             double xipsSpeed = RPMtoIPS(xrpmSpeed);
 
-            double yrpmSpeed = (480 / 128) * (m_yPower + m_yCorrect);
+            double yrpmSpeed = (480.0 / 128) * (m_yPower + m_yCorrect);
             double yipsSpeed = RPMtoIPS(yrpmSpeed);
 
             double angle = (180 / M_PI) * std::atan2(xipsSpeed, yipsSpeed);
@@ -238,29 +238,39 @@ DiffChassis::DiffChassis(std::vector<pros::Motor*> left, std::vector<pros::Motor
     m_fbIn = fbInput;
     m_rotIn = rotInput;
 
-    m_fbOutput = PowerUnit(
-        [this](double power) {m_fbPower = power;},
-        [this]() {m_fbPower = 0;}
+    m_fbDriverIn = PowerUnit(
+        [this](double power) {m_fbDriver = power;},
+        [this]() {m_fbDriver = 0;}
     );
-    m_thetaOutput = PowerUnit(
-        [this](double power) {m_thetaPower = power;},
-        [this]() {m_thetaPower = 0;}
+    m_thetaDriverIn = PowerUnit(
+        [this](double power) {m_thetaDriver = power;},
+        [this]() {m_thetaDriver = 0;}
     );
 
 
+    m_fbAutoIn = PowerUnit(
+        [this](double power) {m_fbAuto = power;},
+        [this]() {m_fbAuto = 0;}
+    );
+    m_thetaAutoIn = PowerUnit(
+        [this](double power) {m_thetaAuto = power;},
+        [this]() {m_thetaAuto = 0;}
+    );
 
-    m_fbOutputCorrect = PowerUnit(
-        [this](double power) {m_fbCorrect = power;},
-        [this]() {m_fbCorrect = 0;}
+
+    m_directLeftIn = PowerUnit(
+        [this](double power) {m_fbAuto = power;},
+        [this]() {m_fbAuto = 0;}
     );
-    m_thetaOutputCorrect = PowerUnit(
-        [this](double power) {m_thetaCorrect = power;},
-        [this]() {m_thetaCorrect = 0;}
+    m_directRightIn = PowerUnit(
+        [this](double power) {m_thetaAuto = power;},
+        [this]() {m_thetaAuto = 0;}
     );
+
 
     m_lVel = TrackingSensor(
         [this]() -> double {
-            double xrpmSpeed = (480 / 128) * (m_fbPower + m_fbCorrect);
+            double xrpmSpeed = (480.0 / 128) * (m_fbDriver + m_fbAuto);
             double xipsSpeed = RPMtoIPS(xrpmSpeed);
 
             //std::cout << "lv: " << std::sqrt(std::pow(xipsSpeed, 2) + std::pow(yipsSpeed, 2)) << "\n";
@@ -289,7 +299,7 @@ DiffChassis::DiffChassis(std::vector<pros::Motor*> left, std::vector<pros::Motor
         [this]() -> double {
             double g_distBetweenWheels = 10.5;
             double maxAngVel = ((2 * RPMtoIPS(450)) / g_distBetweenWheels);
-            double angRadSpeed = (maxAngVel / 128) * (m_thetaPower + m_thetaCorrect);
+            double angRadSpeed = (maxAngVel / 128) * (m_thetaDriver + m_thetaAuto);
             return angRadSpeed;
         },
         [this](double val) {
@@ -300,11 +310,14 @@ DiffChassis::DiffChassis(std::vector<pros::Motor*> left, std::vector<pros::Motor
         }
     );
 
-    m_fbPower = 0;
-    m_thetaPower = 0;
+    m_fbDriver = 0;
+    m_thetaDriver = 0;
 
-    m_fbCorrect = 0;
-    m_thetaCorrect = 0;
+    m_fbAuto = 0;
+    m_thetaAuto = 0;
+
+    m_directLeft = 0;
+    m_directRight = 0;
 
     m_fbPID = NULL;
     m_thetaPID = NULL;
@@ -312,7 +325,7 @@ DiffChassis::DiffChassis(std::vector<pros::Motor*> left, std::vector<pros::Motor
 
     chassisTask = new pros::Task([this](){
         while (true) {
-            if (this->pidStatus || this->manStatus) {
+            if (this->driverEnabled || this->autoEnabled || this->lrEnabled) {
                 this->move();
                 pros::delay(5);
             }
@@ -343,27 +356,31 @@ DiffChassis::~DiffChassis() {
 }
 
 void DiffChassis::move() {
-    if (!this->pidStatus) {
-        m_fbCorrect = 0;
-        m_thetaCorrect = 0;
+    if (!this->autoEnabled) {
+        m_fbAuto = 0;
+        m_thetaAuto = 0;
     }
-    if (!this->manStatus) {
-        m_fbPower = 0;
-        m_thetaPower = 0;
+    if (!this->driverEnabled) {
+        m_fbDriver = 0;
+        m_thetaDriver = 0;
+    }
+    if (!this->lrEnabled) {
+        m_directLeft = 0;
+        m_directRight = 0;
     }
     for (int i = 0; i < m_left.size(); i++) {
-        m_left[i]->move((m_fbPower + m_fbCorrect) + (m_thetaPower + m_thetaCorrect));
+        m_left[i]->move(((m_fbDriver + m_fbAuto) + (m_thetaDriver + m_thetaAuto)) + m_directLeft);
     }
     for (int i = 0; i < m_right.size(); i++) {
-        m_right[i]->move((m_fbPower + m_fbCorrect) - (m_thetaPower + m_thetaCorrect));
+        m_right[i]->move(((m_fbDriver + m_fbAuto) - (m_thetaDriver + m_thetaAuto)) + m_directRight);
     }
 
-    std::cout << "left: " << (m_fbPower + m_fbCorrect) + (m_thetaPower + m_thetaCorrect) << "\n";
-    std::cout << "right: " << (m_fbPower + m_fbCorrect) - (m_thetaPower + m_thetaCorrect) << "\n\n";
+    std::cout << "left: " << (m_fbDriver + m_fbAuto) + (m_thetaDriver + m_thetaAuto) << "\n";
+    std::cout << "right: " << (m_fbDriver + m_fbAuto) - (m_thetaDriver + m_thetaAuto) << "\n\n";
 }
 
 void DiffChassis::move_relative(double distance, int speed, bool nonblocking) {
-    this->continuousPower(false, false);
+    this->powerAccess(false, false, false);
 
     distance = (distance / (M_PI * 3.25)) * 360;
 
@@ -380,8 +397,8 @@ void DiffChassis::move_relative(double distance, int speed, bool nonblocking) {
 }
 
 void DiffChassis::brake() {
-    m_fbCorrect = 0;
-    m_thetaCorrect = 0;
+    m_fbAuto = 0;
+    m_thetaAuto = 0;
     for (int i = 0; i < m_left.size(); i++) {
         m_left[i]->brake();
     }
@@ -391,30 +408,30 @@ void DiffChassis::brake() {
 }
 
 void DiffChassis::driverControl(pros::Controller controller, double dz) {
-    this->continuousPower(false, true);
-    m_fbPower = controller.get_analog(m_fbIn);
-    m_thetaPower = controller.get_analog(m_rotIn);
+    this->powerAccess(true, false, false);
+    m_fbDriver = controller.get_analog(m_fbIn);
+    m_thetaDriver = controller.get_analog(m_rotIn);
 
-    if ((m_fbPower < dz) && (m_fbPower > -dz)) {
-        m_fbPower = 0;
+    if ((m_fbDriver < dz) && (m_fbDriver > -dz)) {
+        m_fbDriver = 0;
     } else {
-        (m_fbPower > 0) ? m_fbPower -= 15 : m_fbPower += 15;
-        m_fbPower *= 1.13;
+        (m_fbDriver > 0) ? m_fbDriver -= 15 : m_fbDriver += 15;
+        m_fbDriver *= 1.13;
     }
-    if ((m_thetaPower < dz) && (m_thetaPower > -dz)) {
-        m_thetaPower = 0;
+    if ((m_thetaDriver < dz) && (m_thetaDriver > -dz)) {
+        m_thetaDriver = 0;
     } else {
-        (m_fbPower > 0) ? m_fbPower -= 15 : m_fbPower += 15;
-        m_thetaPower *= 1.13;
+        (m_fbDriver > 0) ? m_fbDriver -= 15 : m_fbDriver += 15;
+        m_thetaDriver *= 1.13;
     }
 }
 
 void DiffChassis::setFB(double power) {
-    m_fbCorrect = power;
+    m_fbAuto = power;
 }
 
 void DiffChassis::setTheta(double power) {
-    m_thetaCorrect = power;
+    m_thetaAuto = power;
 }
 
 void DiffChassis::brakeMode(pros::MotorBrake type) {
@@ -426,7 +443,7 @@ void DiffChassis::brakeMode(pros::MotorBrake type) {
     }
 }
 
-void DiffChassis::continuousPower(bool pidStatus, bool manStatus) {this->pidStatus = pidStatus; this->manStatus = manStatus;}
+void DiffChassis::powerAccess(bool driver, bool auton, bool lr) {this->driverEnabled = driver; this->autoEnabled = auton; this->lrEnabled = lr;}
 
 void DiffChassis::moveToPoint(Pose current, Point goal, bool turn, bool nonblocking, bool reverse) {
     int rev = reverse ? -1 : 1;
@@ -434,7 +451,7 @@ void DiffChassis::moveToPoint(Pose current, Point goal, bool turn, bool nonblock
     if (!m_hasPID) {
         return;
     }
-    this->continuousPower(true, false);
+    this->powerAccess(false, true, false);
     double goalHead = findHeadingOfLine({current.x, current.y}, goal);
     if (reverse) {
         goalHead += 180;
@@ -453,4 +470,4 @@ void DiffChassis::moveToPoint(Pose current, Point goal, bool turn, bool nonblock
     return;
 }
 
-void DiffChassis::enablePID(void) {this->continuousPower(true, false);}
+void DiffChassis::enablePID(void) {this->powerAccess(false, true, false);}

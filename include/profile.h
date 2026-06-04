@@ -11,29 +11,13 @@
 
 
 struct MPPoint {
-    double x;
-    double y;
-    double heading;
-    double linVel;
-    double angVel;
-    double t;
-    double timeAtPoint;
-};
-
-struct HoloMPPoint {
-    double x;
-    double y;
-    double heading;
-    Vector linVel;
-    double angVel;
-    double t;
-    double timeAtPoint;
-};
-
-struct Zone {
-    double startT; // start value of t
-    double endT; // end value of t
-    Line zoneLine; // line that represents the zone on the graph
+    double x = 0;
+    double y = 0;
+    double heading = 0;
+    double linVel = 0;
+    double angVel = 0;
+    double t = 0;
+    double timeAtPoint = 0;
 };
 
 enum Direction {
@@ -42,22 +26,32 @@ enum Direction {
     RIGHT = 1,
 };
 
+class PhysicalConstraints {
+    public:
+        PhysicalConstraints(double rpm, double gearRatio, double wheelDiameter, double distBetweenDTSides);
+        double maxVelocityAtCurvature(double curvature);
+        
+        double maxAccel;
+        double maxDecel;
+        double maxSpeed;
+
+    private:
+        double dtDiff;
+        double maxRPM;
+};
+
 class MotionProfile {
     public:
         // constructors (one with custom zoning, one without)
-        MotionProfile(CubicHermiteSpline* path, double maxSpeed, std::vector<std::vector<Point>> zonePoints = {});
-        MotionProfile(CubicHermiteSpline* path, double maxSpeed, std::vector<double> headings, std::vector<double> headingTs, std::vector<std::vector<Point>> zonePoints = {});
-        MotionProfile(std::vector<MPPoint>* pregeneratedProfile, double maxSpeed);
+        MotionProfile(CubicHermiteSpline* path, PhysicalConstraints robot, double distSeg);
+        MotionProfile(std::vector<MPPoint>* pregeneratedProfile, PhysicalConstraints robot, double distSeg);
 
         // instance variables (data about profile)
         std::vector<MPPoint> profile;
-        std::vector<HoloMPPoint> holoProfile;
-        std::vector<Zone> zones;
-        double maxSpeed;
+        PhysicalConstraints robot;
 
         // public methods (operations on points)
         MPPoint findNearestPoint(double givenT);
-        HoloMPPoint findNearestHoloPoint(double givenT);
 
     private:
         // private methods (profile generation)
@@ -69,7 +63,7 @@ class MotionProfile {
         CubicHermiteSpline* path;
         std::vector<double> headings;
         std::vector<double> headingTs;
-        bool isHolo;
+        double distSeg;
 };
 
 

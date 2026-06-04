@@ -22,24 +22,27 @@ class VelocityController {
     public:
         double linVel;
         double angVel;
-        VelocityController(PowerUnit* xOutput, PowerUnit* yOutput, PowerUnit* thetaOutput, PoseTracker* globalPos, PIDSet corrector = {});
+        VelocityController(PowerUnit* lOutput, PowerUnit* rOutput, PoseTracker* globalPos, double distBetweenDTSides, double wheelDiameter, double gearRatio);
         void addAction(std::function<void(void)> action, double time);
         void clearActions(void);
         void startProfile(MotionProfile* profile, bool correct = true);
 
 
     private:
-        std::vector<double> calculateOutputOfSides(Vector linearVelocityIPS, double angularVelocityRADPS, double profileMaxIPS);
-        void followProfile(MotionProfile* profile, bool correct = true);
+        std::vector<double> calculateOutputOfSides(double linearVelocityIPS, double angularVelocityRADPS);
+        void followProfile(MotionProfile* profile, bool reverse = false, bool RAMSETE = true);
         
         double timeToRun;
-        PowerUnit* xOutput;
-        PowerUnit* yOutput;
-        PowerUnit* thetaOutput;
+        PowerUnit* lOutput;
+        PowerUnit* rOutput;
 
         PIDSet corrector;
         PoseTracker* globalPos;
         bool willCorrect;
+
+        double distBetweenDTSides;
+        double wheelDiameter;
+        double gearRatio;
 
         std::vector<double> actionTs;
         std::vector<std::function<void(void)>> actions;

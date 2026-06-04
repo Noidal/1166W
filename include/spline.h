@@ -18,8 +18,7 @@ class CubicHermiteSpline {
     public:
         CubicHermiteSpline(Point startPos, Point startV, Point endPos, Point endV);
         Point findPoint(double t);
-        Pose findPose(double t, double step);
-        double findCurvature(double t, double step);
+        Pose findPose(double t);
         std::vector<PoseC> entirePath(double numPoints);
         void createFunction(void);
         void findDerivative(void);
@@ -28,6 +27,7 @@ class CubicHermiteSpline {
         double findNearestPointOnSpline(Point givenPoint, double excludeBelow);
         double calculateCurveSpeed(double t);
         double findNextT(double currentT, double distanceToMove);
+        double advanceLength(double currentT, double distance);
 
         std::vector<CubicPolyData> functions;
         std::vector<QuadraticPolyData> derivative;

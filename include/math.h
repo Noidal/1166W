@@ -70,9 +70,7 @@ Line findLineWithPoints(Point point1, Point point2);
 QuadraticPolyData derivativeOfCubicPoly(CubicPolyData cubicPoly);
 Line derivativeOfQuadratic(QuadraticPolyData quadPoly);
 double fixAngle(double originalAngle);
-double unfixAngle(double originalAngle);
-double RPMtoIPS(double rpm);
-double IPStoRPM(double ips);
+double unfixAngle(double originalAngle);\
 double bind180(double heading);
 double makeRelative(double currentHeading, double goalHeading);
 double calculateSingleDegree(double wheelDiameter);

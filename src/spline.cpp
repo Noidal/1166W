@@ -39,11 +39,11 @@ Point CubicHermiteSpline::findPoint(double t) {
     return result;
 }
 
-Pose CubicHermiteSpline::findPose(double t, double step) {
+Pose CubicHermiteSpline::findPose(double t) {
     Point current = this->findPoint(t);
     Pose currentP = {current.x, current.y};
 
-    double prevT = t - step;
+    double prevT = t - 0.0001;
     Point prev = this->findPoint(prevT);
 
     currentP.heading = findHeadingOfLine(prev, current);
@@ -58,7 +58,7 @@ std::vector<PoseC> CubicHermiteSpline::entirePath(double numPoints) {
     double step = 1 / numPoints;
 
     for (double t = 0; t < 1; t += step) {
-        currentPoseC = {this->findPose(t, step).x, this->findPose(t, step).y, this->findPose(t, step).heading, this->calculateCurvature(t)};
+        currentPoseC = {this->findPose(t).x, this->findPose(t).y, this->findPose(t).heading, this->calculateCurvature(t)};
         fullPath.push_back(currentPoseC);
     }
 
@@ -187,7 +187,7 @@ double CubicHermiteSpline::calculateCurvature(double t) {
     double solvedSDX = (secondDerivX.slope * t) + secondDerivX.yIntercept;
     double solvedSDY = (secondDerivY.slope * t) + secondDerivY.yIntercept;
 
-    double curvature = (std::abs((derivativeX * solvedSDY) - (derivativeY * solvedSDX))) / std::pow(std::sqrt((std::pow(derivativeX, 2) + std::pow(derivativeY, 2))), 3);
+    double curvature = ((derivativeX * solvedSDY) - (derivativeY * solvedSDX)) / std::pow(std::sqrt((std::pow(derivativeX, 2) + std::pow(derivativeY, 2))), 3);
 
     return curvature;
 }
@@ -224,4 +224,21 @@ double CubicHermiteSpline::findNextT(double currentT, double distanceToMove) {
     double deltaT = distanceToMove / this->calculateCurveSpeed(currentT);
     double nextT = currentT + deltaT;
     return nextT;
+}
+
+double CubicHermiteSpline::advanceLength(double currentT, double distance) {
+    double accDist = 0;
+    Pose currentPose = findPose(currentT);
+    Pose prevPose = currentPose;
+    double finalT = currentT;
+
+    while (accDist < distance) {
+        currentPose = this->findPose(currentT + (finalT - currentT));
+
+        accDist += calculateDistance({currentPose.x, currentPose.y}, {prevPose.x, prevPose.y});
+        prevPose = currentPose;
+        finalT += 0.001;
+    }
+
+    return finalT;
 }

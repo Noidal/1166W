@@ -192,9 +192,9 @@ double thetaTolAbove90 = 3.5;
 
     Odometry odom(fbTrack, headingTracker, startPose);
 
-    PIDController fbPID(PIDfbTrack, fbConstants, chassis.m_fbOutputCorrect, fbTol);
-    PIDController thetaPIDSub90(PIDHeadingTracker, thetaConstantsSub90, chassis.m_thetaOutputCorrect, thetaTolSub90);
-    PIDController thetaPIDAbove90(PIDHeadingTracker, thetaConstantsAbove90, chassis.m_thetaOutputCorrect, thetaTolAbove90);
+    PIDController fbPID(PIDfbTrack, fbConstants, chassis.m_fbAutoIn, fbTol);
+    PIDController thetaPIDSub90(PIDHeadingTracker, thetaConstantsSub90, chassis.m_thetaAutoIn, thetaTolSub90);
+    PIDController thetaPIDAbove90(PIDHeadingTracker, thetaConstantsAbove90, chassis.m_thetaAutoIn, thetaTolAbove90);
 
     // PIDSet robotPIDs(&xPID, &yPID, &thetaPIDSub90, &thetaPIDAbove90);
     PoseTracker currentPose(&odom);
@@ -213,6 +213,6 @@ double thetaTolAbove90 = 3.5;
     }
 
 
-    // VelocityController follower(&chassis.m_xOutput, &chassis.m_yOutput, &chassis.m_thetaOutput, &currentPose, robotPIDs);
+    VelocityController follower(&chassis.m_fbAutoIn, &chassis.m_thetaAutoIn, &currentPose);
 
 #endif
