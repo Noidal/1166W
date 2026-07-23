@@ -1,26 +1,11 @@
 #include "follow.h"
 
-VelocityController::VelocityController(PowerUnit* lOutput, PowerUnit* rOutput, PoseTracker* globalPos, double distBetweenDTSides, double wheelDiameter, double gearRatio) {
+VelocityController::VelocityController(PowerUnit* lOutput, PowerUnit* rOutput, PoseTracker* globalPos, PhysicalConstraints robot) {
     this->lOutput = lOutput;
     this->rOutput = rOutput;
     this->globalPos = globalPos;
 
-    this->distBetweenDTSides = distBetweenDTSides;
-    this->wheelDiameter = wheelDiameter;
-    this->gearRatio = gearRatio;
-}
-
-// uses the kinematic equations of a differential chassis and unit conversions to convert a linear and angular velocity to something that can be used
-// by each side of the drivetrain
-std::vector<double> VelocityController::calculateOutputOfSides(double linearVelocityIPS, double angularVelocityRADPS) {
-    
-    double leftVelocityIPS = linearVelocityIPS - ((angularVelocityRADPS * distBetweenDTSides) / 2); // lv = v - ((w * L) / 2)
-    double rightVelocityIPS = linearVelocityIPS + ((angularVelocityRADPS * distBetweenDTSides) / 2); // rv = v + ((w * L) / 2)
-
-    double leftVelocityRPM = (leftVelocityIPS * 60 / (M_PI * wheelDiameter)) / gearRatio; // rpm = m/s * (60 s / min) * (1 rotation / (single degree travel * 360))
-    double rightVelocityRPM = (rightVelocityIPS * 60 / (M_PI * wheelDiameter)) / gearRatio; // rpm = m/s * (60 s / min) * (1 rotation / (single degree travel * 360))
-
-    return {leftVelocityRPM, rightVelocityRPM};
+    this->robot = robot;
 }
 
 // (private)
@@ -36,29 +21,36 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
     // speed variables
     std::vector<double> velocitiesRPM = {0, 0};
     // clock variables
-    double delay = 5;
+    double startTime = pros::millis();
     // action variables
     std::vector<bool> actionCompleteds = {false, false, false, false, false, false};
+
 
     // control loop
     while (true) {
 
         // calculates the current point as the nearest point to the current step
+        double elapsedTime = pros::millis() - startTime;
+        for (; pointID < currentlyFollowing->profile.size(); pointID++) {
+            if (!(elapsedTime > currentlyFollowing->profile[pointID].timeAtPoint)) {
+                break;
+            }
+        }
         currentPoint = currentlyFollowing->profile[pointID];
 
         // sets linear and angular velocities to that of the current point - these are changed by RAMSETE if it is on
         double linVel = currentPoint.linVel;
         double angVel = currentPoint.angVel;
 
+
         // calculation of output of each side with error corrections from RAMSETE
         if (RAMSETE) {
             Pose location = {this->globalPos->get().x * 0.0254, this->globalPos->get().y * 0.0254, this->globalPos->get().heading};
-            nextPoint = currentlyFollowing->findNearestPoint(currentStep + step);
+            nextPoint = currentlyFollowing->profile[pointID + 1];
             nextPoint = {nextPoint.x * 0.0254, nextPoint.y * 0.0254, nextPoint.heading};
 
             if (reverse) {
                 linVel *= -1;
-
                 if (location.heading > 180) {
                     location.heading -= 180;
                 } else {
@@ -68,6 +60,8 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
 
             double fixedOdomAngle = fixAngle(location.heading) * (M_PI / 180);
             double fixedNextAngle = fixAngle(nextPoint.heading) * (M_PI / 180);
+
+            std::cout << "head = " << location.heading << "fixed = " << fixedNextAngle << "\n";
 
 
 
@@ -87,7 +81,7 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
             if (error.heading < -M_PI) {
                 error.heading = error.heading + (2 * M_PI);
             } else if (error.heading > M_PI) {
-                error.heading = (2 * M_PI) - error.heading;
+                error.heading = error.heading - (2 * M_PI);
             }
 
             //std::cout << "prp = " << fixedNextAngle << ", ap = " << fixedOdomAngle << ", c = " << error.heading << "\n";
@@ -113,17 +107,15 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
 
         // actual calculations of modified linear and angular velocities as additions/subtractions to the profile's original values
             // the original linear velocity is also transformed to follow the robot's error in heading before having the control input subtracted from it
-            linVel = ((linVel * 0.0254) * std::cos(error.heading)) + u1;
+            linVel = (linVel * std::cos(error.heading)) + u1;
             // the angular velocity does not need to be transformed in the same way that the linear velocity needs to because it is already angular in reference to the robot
-            angVel = currentPoint.angVel + u2;
+            angVel = angVel + u2;
 
             linVel *= 39.37008;
-
-            linVel *= currentPoint.linVel / currentlyFollowing->maxSpeed;
         }
 
         // standard calculation of output of each side based on specifications of the motion profile
-        velocitiesRPM = this->calculateOutputOfSides(linVel, angVel);
+        velocitiesRPM = robot.outputOfSides(linVel, angVel);
 
         // executes custom actions if the profile has reached or passed their t-point and have not yet been activated
         for (int i = 0; i < actions.size(); i++) {
@@ -140,23 +132,20 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
         // sends the output voltage to the motors
         if (reverse && !RAMSETE) {
             lOutput->move(127 * (-velocitiesRPM[1] / 600));
-            rOutput->move(127 *( -velocitiesRPM[0] / 600));
+            rOutput->move(127 * (-velocitiesRPM[0] / 600));
         } else {
             lOutput->move(127 * (velocitiesRPM[0] / 600));
             rOutput->move(127 * (velocitiesRPM[1] / 600));
         }
         
         // 5 ms delay (- the time taken to calculate)
-        pros::delay(delay);
+        pros::delay(5);
 
         // if the current step is the final point (t = 1 - step), 
         // then the drivetrain is stopped and the function ends
         if (currentPoint.t == currentlyFollowing->profile[currentlyFollowing->profile.size() - 1].t) {
             return;
         }
-
-        // goes to the next step of the function if it did not end
-        pointID += 1;
     }
 }
 

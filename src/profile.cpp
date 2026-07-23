@@ -1,15 +1,49 @@
 #include "profile.h"
 
-PhysicalConstraints::PhysicalConstraints(double rpm, double gearRatio, double wheelDiameter, double distBetweenDTSides) {
+PhysicalConstraints::PhysicalConstraints(double rpm, double gearRatio, double wheelDiameter, double distBetweenDTSides, double mass, double dtEfficiency, double fricCoef) {
+    // physical properties
+    this->gearRatio = gearRatio;
+    this->wheelDiameter = wheelDiameter;
+
+    // velocity constraints
     this->maxSpeed = (rpm * gearRatio * (M_PI * wheelDiameter)) / 60;
     this->dtDiff = distBetweenDTSides;
     this->maxRPM = rpm;
+
+    // acceleration constraints
+    this->maxTorque = 210 / this->maxRPM;
+    double maxMotorAccel = (2 * (((2 * (this->maxTorque * gearRatio * dtEfficiency)) + (0.5 * 3 * dtEfficiency)) / (((wheelDiameter * 0.0254) / 2) * mass))) * 39.37;
+    double maxFricAccel = 386 * fricCoef;
+
+    this->maxAccel = std::min(maxMotorAccel, maxFricAccel);
+    //this->maxAccel = 30;
+    this->maxDecel = maxAccel;
+    this->maxAngAccel = (2 * maxAccel) / this->dtDiff;
 }
 
 double PhysicalConstraints::maxVelocityAtCurvature(double curvature) {
     double maxSpeed = (2 * this->maxSpeed) / ((std::abs(curvature) * this->dtDiff) + 2);
 
     return maxSpeed;
+}
+
+double PhysicalConstraints::maxLinAccelAtAngAccel(double angAccel) {
+    double linAccel = this->maxAccel - std::abs((angAccel * this->dtDiff) / 2.0);
+
+    return linAccel;
+}
+
+std::vector<double> PhysicalConstraints::outputOfSides(double linearVelocityIPS, double angularVelocityRADPS) {
+    
+    double leftVelocityIPS = linearVelocityIPS - ((angularVelocityRADPS * this->dtDiff) / 2.0); // lv = v - ((w * L) / 2)
+    double rightVelocityIPS = linearVelocityIPS + ((angularVelocityRADPS * this->dtDiff) / 2.0); // rv = v + ((w * L) / 2)
+
+    // return {leftVelocityIPS, rightVelocityIPS};
+
+    double leftVelocityRPM = (leftVelocityIPS * 60.0 / (M_PI * this->wheelDiameter)) / this->gearRatio; // rpm = m/s * (60 s / min) * (1 rotation / (single degree travel * 360))
+    double rightVelocityRPM = (rightVelocityIPS * 60.0 / (M_PI * this->wheelDiameter)) / this->gearRatio; // rpm = m/s * (60 s / min) * (1 rotation / (single degree travel * 360))
+
+    return {leftVelocityRPM, rightVelocityRPM};
 }
 
 MotionProfile::MotionProfile(CubicHermiteSpline* path, PhysicalConstraints robot, double distSeg) {
@@ -49,54 +83,59 @@ void MotionProfile::generateVelocities() {
     double currentT = 0;
     double distanceToNext = 0;
 
+    // discretize spline parameterized by distance
     while (currentT < 1) {
-        profile.push_back({path->findPose(currentT).x, path->findPose(currentT).y, path->findPose(currentT).heading});
+        profile.push_back({path->findPose(currentT).x, path->findPose(currentT).y, path->findPose(currentT).heading, 0, 0, currentT});
 
         currentT = path->advanceLength(currentT, this->distSeg);
     }
 
-    for (int i = 0; currentT < 1; i++) {
+    // forward pass
+    for (int i = 0; i < profile.size(); i++) {
 
-        currentPoint = profile[i];
-        prevPoint = (i > 0) ? profile[i - 1] : MPPoint{};
+        prevPoint = (i > 0) ? profile[i - 1] : MPPoint{0, 0, 0, 0, 0, -0.001};
 
         // velocity calculations
-        double curvLimitedLinVel = robot.maxVelocityAtCurvature(this->path->calculateCurvature(currentT));
-        double accelLimitedLinVel = prevPoint.linVel + (0.005 * robot.maxAccel);
-        currentPoint.linVel = std::min(curvLimitedLinVel, accelLimitedLinVel);
+        double curvLimitedLinVel = robot.maxVelocityAtCurvature(this->path->calculateCurvature(profile[i].t));
+        double accelLimitedLinVel = std::sqrt(std::pow(prevPoint.linVel, 2) + (2.0 * robot.maxAccel * this->distSeg));
+        /*
+        double dkappads = std::abs(this->path->calculateCurvature(profile[i].t) - this->path->calculateCurvature(prevPoint.t)) / this->distSeg;
+        double dkappadsLimitedLinVel = std::sqrt(robot.maxAngAccel / dkappads);
+        profile[i].linVel = std::min(std::min(curvLimitedLinVel, accelLimitedLinVel), dkappadsLimitedLinVel);
+        */
+        profile[i].linVel = std::min(curvLimitedLinVel, accelLimitedLinVel);
 
         // the angular velocity is the curvature of the current point multiplied by the current linear velocity
-        currentPoint.angVel = currentPoint.linVel * this->path->calculateCurvature(currentT);
-        
-        // adds the new velocities and point as the next profile point
-        profile.push_back(currentPoint);
-
-
-        if (currentPoint.linVel < 1) {currentPoint.linVel = 1;}
-        distanceToNext = currentPoint.linVel * 0.005;
-        currentT = this->path->findNextT(currentT, distanceToNext);
+        profile[i].angVel = profile[i].linVel * this->path->calculateCurvature(profile[i].t);
     }
 
-    for (int i = profile.size() - 1; currentT > 0; i--) {
+    profile[profile.size() - 1].linVel = 0;
+    profile[profile.size() - 1].angVel = 0;
 
-        currentPoint = {this->path->findPose(currentT).x, this->path->findPose(currentT).y, this->path->findPose(currentT).heading};
-        prevPoint = profile[profile.size() - 1];
+    // backward pass
+    for (int i = profile.size() - 2; i >= 0; i--) {
+
+        prevPoint = (i < profile.size() - 1) ? profile[i + 1] : MPPoint{0, 0, 0, 0, 0, 1.001};
 
         // velocity calculations
-        double curvLimitedLinVel = robot.maxVelocityAtCurvature(this->path->calculateCurvature(currentT));
-        double accelLimitedLinVel = prevPoint.linVel + (0.005 * robot.maxAccel);
-        currentPoint.linVel = std::min(curvLimitedLinVel, accelLimitedLinVel);
+        double curvLimitedLinVel = robot.maxVelocityAtCurvature(this->path->calculateCurvature(profile[i].t));
+        double accelLimitedLinVel = std::sqrt(std::pow(prevPoint.linVel, 2) + (2.0 * robot.maxDecel * this->distSeg));
+
+        double dkappads = std::abs(this->path->calculateCurvature(profile[i].t) - this->path->calculateCurvature(prevPoint.t)) / this->distSeg;
+        double dkappadsLimitedLinVel = std::sqrt(robot.maxAngAccel / dkappads);
+        profile[i].linVel = std::min(profile[i].linVel, std::min(std::min(curvLimitedLinVel, accelLimitedLinVel), dkappadsLimitedLinVel));
+
+        profile[i].linVel = std::min(profile[i].linVel, std::min(curvLimitedLinVel, accelLimitedLinVel));
 
         // the angular velocity is the curvature of the current point multiplied by the current linear velocity
-        currentPoint.angVel = currentPoint.linVel * this->path->calculateCurvature(currentT);
-        
-        // adds the new velocities and point as the next profile point
-        profile.push_back(currentPoint);
+        profile[i].angVel = profile[i].linVel * this->path->calculateCurvature(profile[i].t);
+    }
 
+    double accumulatedTime = 0;
 
-        if (currentPoint.linVel < 1) {currentPoint.linVel = 1;}
-        distanceToNext = currentPoint.linVel * 0.005;
-        currentT = this->path->findNextT(currentT, distanceToNext);
+    for (int i = 0; i < profile.size(); i++) {
+        accumulatedTime += (this->distSeg / profile[i].linVel) * 1000;
+        profile[i].timeAtPoint = accumulatedTime;
     }
 }
 

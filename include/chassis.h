@@ -81,6 +81,7 @@ class DiffChassis {
         void driverControl(pros::Controller controller, double dz);
         void powerAccess(bool driver, bool auton, bool lr);
         void moveToPoint(Pose current, Point goal, bool turn = true, bool nonblocking = false, bool reverse = false);
+        double feedforward(double velocity, int side);
         void enablePID(void);
 
         void setFB(double power);

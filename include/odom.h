@@ -40,8 +40,7 @@ class Odometry {
         void holoUpdateLoop();
 
         bool m_taskRunning;
-        bool m_isHolo;
-        bool m_isSide;
+        bool m_hasPerp;
         pros::Task* loopTask;
 
         TrackingSensor m_movementSensor;

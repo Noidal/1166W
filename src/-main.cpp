@@ -51,7 +51,8 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
-	chassis.powerAccess(false, true, false);
+	
+	chassis.powerAccess(false, false, true);
 	chassis.brakeMode(pros::v5::MotorBrake::hold);
 
 //hif
@@ -64,6 +65,13 @@ void autonomous() {
 		pros::lcd::print(1, "y = %f", currentPose.get().y);
 		pros::lcd::print(2, "h = %f", currentPose.get().heading);  pros::delay(50);}}); */
 
+	CubicHermiteSpline test = CubicHermiteSpline({0, 0}, {1.5, 114}, {30.5, 0}, {77, 37.5});
+	MotionProfile testP = MotionProfile(&test, robot, 0.5);
+	follower.followProfile(&testP, false, true);
+
+	while (true) {
+		pros::delay(100000);
+	}
 	switch (autonnumber) {
 
 	}
@@ -85,21 +93,27 @@ void autonomous() {
 void opcontrol() {
 	master.rumble("-.-");
 
+	/*
 	chassis.powerAccess(true, false, false);
 	chassis.brake();
-	chassis.brakeMode(pros::v5::MotorBrake::coast);
+	chassis.brakeMode(pros::v5::MotorBrake::coast); */
 
 	int deadzone = 15;
+	int startTime = pros::millis();
+	double pvel = 0;
+	double cvel = 0;
 
 	while (true) {
+		
 		pros::lcd::print(0, "x = %f", currentPose.get().x);
 		pros::lcd::print(1, "y = %f", currentPose.get().y);
 		pros::lcd::print(2, "h1 = %f", inertial1.get_heading());
-		pros::lcd::print(3, "h2 = %f", inertial2.get_heading()); /*
-		std::cout << "{" << currentPose.get().x << ", " << currentPose.get().y << "}\n"; */
+		pros::lcd::print(3, "h2 = %f", inertial2.get_heading()); 
+		
+		std::cout << "{" << currentPose.get().x << ", " << currentPose.get().y << "}\n";
 	// Differential Drive Control
 		chassis.driverControl(master, deadzone);
 
-	pros::delay(20);
+	pros::delay(50);
 	}
 }

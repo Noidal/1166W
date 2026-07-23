@@ -159,7 +159,7 @@ double thetaTolAbove90 = 3.5;
 
     TrackingSensor headingTracker(
         []() -> double {
-            return inertial1.get_heading();
+            return inertial2.get_heading();
         }
     );
 
@@ -191,7 +191,7 @@ double thetaTolAbove90 = 3.5;
     );
 
     Odometry odom(fbTrack, headingTracker, startPose);
-
+    
     PIDController fbPID(PIDfbTrack, fbConstants, chassis.m_fbAutoIn, fbTol);
     PIDController thetaPIDSub90(PIDHeadingTracker, thetaConstantsSub90, chassis.m_thetaAutoIn, thetaTolSub90);
     PIDController thetaPIDAbove90(PIDHeadingTracker, thetaConstantsAbove90, chassis.m_thetaAutoIn, thetaTolAbove90);
@@ -212,7 +212,7 @@ double thetaTolAbove90 = 3.5;
         waitUntil((inertial2.get_heading() > heading - (range / 2)) && (inertial2.get_heading() < heading + (range / 2)));
     }
 
-
-    VelocityController follower(&chassis.m_fbAutoIn, &chassis.m_thetaAutoIn, &currentPose);
+    PhysicalConstraints robot(600, 0.75, 3.25, 13, 3.100, 0.8, 0.01);
+    VelocityController follower(&chassis.m_directLeftIn, &chassis.m_directRightIn, &currentPose, robot);
 
 #endif

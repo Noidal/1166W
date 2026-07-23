@@ -5,7 +5,6 @@
 #include <functional>
 
 #include "main.h"
-#include "interface.h"
 #include "math.h"
 #include "spline.h"
 
@@ -20,24 +19,28 @@ struct MPPoint {
     double timeAtPoint = 0;
 };
 
-enum Direction {
-    LEFT = -1,
-    STRAIGHT = 0,
-    RIGHT = 1,
+struct CustomSpeed {
+    double t = 0;
+    double speed = 1;
 };
 
 class PhysicalConstraints {
     public:
-        PhysicalConstraints(double rpm, double gearRatio, double wheelDiameter, double distBetweenDTSides);
+        PhysicalConstraints(double rpm, double gearRatio, double wheelDiameter, double distBetweenDTSides, double mass, double dtEfficiency, double fricCoef);
+        PhysicalConstraints() = default;
         double maxVelocityAtCurvature(double curvature);
+        double maxLinAccelAtAngAccel(double angAccel);
+        std::vector<double> outputOfSides(double linearVelocityIPS, double angularVelocityRADPS);
         
+        double wheelDiameter;
+        double gearRatio;
         double maxAccel;
         double maxDecel;
         double maxSpeed;
-
-    private:
         double dtDiff;
         double maxRPM;
+        double maxTorque;
+        double maxAngAccel;
 };
 
 class MotionProfile {
@@ -49,6 +52,7 @@ class MotionProfile {
         // instance variables (data about profile)
         std::vector<MPPoint> profile;
         PhysicalConstraints robot;
+        double distSeg;
 
         // public methods (operations on points)
         MPPoint findNearestPoint(double givenT);
@@ -63,7 +67,6 @@ class MotionProfile {
         CubicHermiteSpline* path;
         std::vector<double> headings;
         std::vector<double> headingTs;
-        double distSeg;
 };
 
 

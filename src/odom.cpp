@@ -62,7 +62,7 @@ Odometry::Odometry(TrackingSensor movementSensor, // this sensor should track ho
     m_movementSensor = movementSensor;
     m_headingSensor = headingSensor;
 
-    m_isHolo = false;
+    m_hasPerp = false;
 
     // sets the current location to the offset
     m_robotPose = startPosition;
@@ -85,7 +85,7 @@ Odometry::Odometry(TrackingSensor movementSensor, // this sensor should track ho
     m_headingSensor = headingSensor;
     m_sideSensor = sideSensor;
 
-    m_isHolo = true;
+    m_hasPerp = true;
 
     // sets the current location to the offset
     m_robotPose = startPosition;
@@ -100,11 +100,6 @@ Odometry::Odometry(TrackingSensor movementSensor, // this sensor should track ho
 
 Point Odometry::update(double heading, double moved) {
     double originalHeading = heading;
-
-    // changes the heading if the odom pode is a perpendicular one
-    if (m_isSide) {
-        heading += 180;
-    }
 
     // switches the heading based on the direction of the turn
     heading = moved >= 0
@@ -157,7 +152,7 @@ Point Odometry::update(double heading, double moved) {
 
 // continually updates the value of the universal current location for use by every function
 void Odometry::updateLoop() {
-    if (m_isHolo) {
+    if (m_hasPerp) {
         holoUpdateLoop();
         return;
     }
@@ -224,13 +219,11 @@ void Odometry::holoUpdateLoop() {
             cumulativeYOdom = m_sideSensor.get();
             // calculates the change in odometry reading based on the previous measurement
             changeInXOdom = cumulativeXOdom - previousXOdom;
-            changeInYOdom = cumulativeYOdom - previousYOdom;
-            // updates the location
             double newHeading = m_headingSensor.get();
+            changeInYOdom = (cumulativeYOdom - previousYOdom) - ((newHeading - previousLocation.heading) * ((2 * M_PI * 4.25) / 360));
+            // updates the location
             Point changeInXLocation = this->update(newHeading, changeInXOdom);
-            m_isSide = true;
-            Point changeInYLocation = this->update(newHeading, changeInYOdom);
-            m_isSide = false;
+            Point changeInYLocation = this->update((newHeading + 90 > 360) ? (newHeading + 90) - 360 : (newHeading + 90), changeInYOdom);
             //universalCurrentLocation = {newLocation.x, newLocation.y, Inertial1.get_heading()};
             m_robotPose = {m_robotPose.x + changeInXLocation.x + changeInYLocation.x, m_robotPose.y + changeInXLocation.y + changeInYLocation.y, newHeading};
             //std::cout << "x = " << universalCurrentLocation.x << ", y = " << universalCurrentLocation.y << ", h = " << universalCurrentLocation.heading << "\n";

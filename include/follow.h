@@ -22,15 +22,15 @@ class VelocityController {
     public:
         double linVel;
         double angVel;
-        VelocityController(PowerUnit* lOutput, PowerUnit* rOutput, PoseTracker* globalPos, double distBetweenDTSides, double wheelDiameter, double gearRatio);
+        VelocityController(PowerUnit* lOutput, PowerUnit* rOutput, PoseTracker* globalPos, PhysicalConstraints robot);
         void addAction(std::function<void(void)> action, double time);
         void clearActions(void);
         void startProfile(MotionProfile* profile, bool correct = true);
+        void followProfile(MotionProfile* profile, bool reverse = false, bool RAMSETE = true);
 
 
     private:
         std::vector<double> calculateOutputOfSides(double linearVelocityIPS, double angularVelocityRADPS);
-        void followProfile(MotionProfile* profile, bool reverse = false, bool RAMSETE = true);
         
         double timeToRun;
         PowerUnit* lOutput;
@@ -40,9 +40,7 @@ class VelocityController {
         PoseTracker* globalPos;
         bool willCorrect;
 
-        double distBetweenDTSides;
-        double wheelDiameter;
-        double gearRatio;
+        PhysicalConstraints robot;
 
         std::vector<double> actionTs;
         std::vector<std::function<void(void)>> actions;
