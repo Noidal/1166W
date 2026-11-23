@@ -12,7 +12,7 @@ PhysicalConstraints::PhysicalConstraints(double rpm, double gearRatio, double wh
 
     // acceleration constraints
     this->maxTorque = 210 / this->maxRPM;
-    double maxMotorAccel = (2 * (((2 * (this->maxTorque * gearRatio * dtEfficiency)) + (0.5 * 3 * dtEfficiency)) / (((wheelDiameter * 0.0254) / 2) * mass))) * 39.37;
+    double maxMotorAccel = (2 * (2 * (this->maxTorque * gearRatio * dtEfficiency))) * 39.37;
     double maxFricAccel = 386 * fricCoef;
 
     this->maxAccel = std::min(maxMotorAccel, maxFricAccel);
@@ -136,6 +136,10 @@ void MotionProfile::generateVelocities() {
     for (int i = 0; i < profile.size(); i++) {
         accumulatedTime += (this->distSeg / profile[i].linVel) * 1000;
         profile[i].timeAtPoint = accumulatedTime;
+    }
+
+    for (int i = 0; i < profile.size(); i++) {
+        // std::cout << "(" << profile[i].linVel << ", " << profile[i].angVel << ")\n";
     }
 }
 

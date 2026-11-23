@@ -92,6 +92,7 @@ Odometry::Odometry(TrackingSensor movementSensor, // this sensor should track ho
 
     // resets the rotational sensor to zero
     movementSensor.set(0);
+    sideSensor.set(0);
 
     // sets the headings to the heading offset
     headingSensor.set(startPosition.heading);
@@ -220,7 +221,13 @@ void Odometry::holoUpdateLoop() {
             // calculates the change in odometry reading based on the previous measurement
             changeInXOdom = cumulativeXOdom - previousXOdom;
             double newHeading = m_headingSensor.get();
-            changeInYOdom = (cumulativeYOdom - previousYOdom) - ((newHeading - previousLocation.heading) * ((2 * M_PI * 4.25) / 360));
+            double headingChange = newHeading - previousLocation.heading;
+            if (headingChange > 180) {
+                headingChange -= 360;
+            } else if (headingChange < -180) {
+                headingChange += 360;
+            }
+            changeInYOdom = (cumulativeYOdom - previousYOdom) + ((headingChange) * ((2 * M_PI * 4) / 360));
             // updates the location
             Point changeInXLocation = this->update(newHeading, changeInXOdom);
             Point changeInYLocation = this->update((newHeading + 90 > 360) ? (newHeading + 90) - 360 : (newHeading + 90), changeInYOdom);

@@ -61,7 +61,7 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
             double fixedOdomAngle = fixAngle(location.heading) * (M_PI / 180);
             double fixedNextAngle = fixAngle(nextPoint.heading) * (M_PI / 180);
 
-            std::cout << "head = " << location.heading << "fixed = " << fixedNextAngle << "\n";
+            // std::cout << "head = " << location.heading << "fixed = " << fixedNextAngle << "\n";
 
 
 
@@ -124,6 +124,7 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
                 actionCompleteds[i] = true;
             }
         }
+        // std::cout << "(" << currentPoint.x - globalPos->get().x << ", " << currentPoint.y - globalPos->get().y << "), ";
         
         // converts the velocity in rpm to velocity in millivolts
         int maxVoltage = 12000; // innate max voltage of motors (in mV)
@@ -131,19 +132,25 @@ void VelocityController::followProfile(MotionProfile* currentlyFollowing, bool r
 
         // sends the output voltage to the motors
         if (reverse && !RAMSETE) {
-            lOutput->move(127 * (-velocitiesRPM[1] / 600));
-            rOutput->move(127 * (-velocitiesRPM[0] / 600));
+            lOutput->move(-velocitiesRPM[1]);
+            rOutput->move(-velocitiesRPM[0]);
         } else {
-            lOutput->move(127 * (velocitiesRPM[0] / 600));
-            rOutput->move(127 * (velocitiesRPM[1] / 600));
+            lOutput->move(velocitiesRPM[0]);
+            rOutput->move(velocitiesRPM[1]);
         }
+
+        // std::cout << "(" << globalPos->get().x << ", " << globalPos->get().y << ")\n";
         
         // 5 ms delay (- the time taken to calculate)
-        pros::delay(5);
+        pros::delay(10);
 
         // if the current step is the final point (t = 1 - step), 
         // then the drivetrain is stopped and the function ends
         if (currentPoint.t == currentlyFollowing->profile[currentlyFollowing->profile.size() - 1].t) {
+            if (RAMSETE) {
+                lOutput->move(0);
+                rOutput->move(0);
+            }
             return;
         }
     }

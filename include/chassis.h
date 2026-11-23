@@ -125,6 +125,11 @@ class DiffChassis {
         bool autoEnabled;
         bool lrEnabled;
         pros::Task* chassisTask;
+
+        double prevLVelo = 0;
+        double prevRVelo = 0;
+        double LAccelTimer = 0;
+        double RAccelTimer = 0;
 };
 
 #endif

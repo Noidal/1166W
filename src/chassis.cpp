@@ -325,11 +325,19 @@ DiffChassis::DiffChassis(std::vector<pros::Motor*> left, std::vector<pros::Motor
     m_hasPID = false;
 
     chassisTask = new pros::Task([this](){
+        int i = 0;
         while (true) {
-            if (this->driverEnabled || this->autoEnabled || this->lrEnabled) {
-                this->move();
-                pros::delay(5);
+            this->move();
+            if (true) {
+                /// std::cout << "(" << pros::millis() / 10.0 << ", " << ((m_right[0]->get_actual_velocity())) << "), ";
+                // std::cout << "(" << pros::millis() / 10.0 << ", " << ((m_directRight)) << "), ";
+                // std::cout << "(" << pros::millis() / 10.0 << ", " << pros::millis() / 10.0 << "), ";
+
+                // std::cout << "(" << (m_directLeft) << ", " << ((m_left[0]->get_actual_velocity()) / 1) << "), ";
+                // std::cout << "(" << (m_directRight) << ", " << ((m_right[0]->get_actual_velocity()) / 1) << "), ";
+                i++;
             }
+            pros::delay(10);
         }
     });
 }
@@ -357,6 +365,8 @@ DiffChassis::~DiffChassis() {
 }
 
 void DiffChassis::move() {
+    double newLeft = 0;
+    double newRight = 0;
     if (!this->autoEnabled) {
         m_fbAuto = 0;
         m_thetaAuto = 0;
@@ -369,14 +379,15 @@ void DiffChassis::move() {
         m_directLeft = 0;
         m_directRight = 0;
     } else {
-        /*m_directLeft = this->feedforward(m_directLeft, -1);
-        m_directRight = this->feedforward(m_directLeft, 1);*/
+        newLeft = m_directLeft == 0 ? 0 : this->feedforward(m_directLeft, -1);
+        newRight = m_directRight == 0 ? 0 : this->feedforward(m_directRight, 1);
     }
+    int total = 0;
     for (int i = 0; i < m_left.size(); i++) {
-        m_left[i]->move(((m_fbDriver + m_fbAuto) + (m_thetaDriver + m_thetaAuto)) + m_directLeft);
+        m_left[i]->move(((m_fbDriver + m_fbAuto) + (m_thetaDriver + m_thetaAuto)) + newLeft);
     }
     for (int i = 0; i < m_right.size(); i++) {
-        m_right[i]->move(((m_fbDriver + m_fbAuto) - (m_thetaDriver + m_thetaAuto)) + m_directRight);
+        m_right[i]->move(((m_fbDriver + m_fbAuto) - (m_thetaDriver + m_thetaAuto)) + newRight);
     }
 }
 
@@ -463,7 +474,9 @@ void DiffChassis::moveToPoint(Pose current, Point goal, bool turn, bool nonblock
     if (makeRelative(current.heading, dir * goalHead) > 180) {
         dir = -1;
     }
-    std::cout << makeRelative(current.heading, dir * goalHead) << "\n";
+    if (!(abs(makeRelative(current.heading, dir * goalHead)) < 7) && (turn == true)) {turn = true;}
+    else {turn = false;}
+    if (goal.y == 35) {std::cout << "gh = " << makeRelative(current.heading, dir * goalHead) << "\n";}
     if (turn) {
         m_thetaPID->operator()(makeRelative(current.heading, dir * goalHead))->movement(makeRelative(current.heading, dir * goalHead));
     }
@@ -474,18 +487,32 @@ void DiffChassis::moveToPoint(Pose current, Point goal, bool turn, bool nonblock
 }
 
 double DiffChassis::feedforward(double velocity, int side) {
-	double ff = ((velocity >= 0 ? 1 : -1) * 6) + (0.535 * velocity);
-
     double rpm = 0;
     double numberMotors = 0;
-    if (side <= 0) {for (int i = 0; i < m_left.size(); i++) {rpm += m_left[i]->get_actual_velocity();} numberMotors += m_left.size();}
-    if (side >= 0) {for (int i = 0; i < m_right.size(); i++) {rpm += m_right[i]->get_actual_velocity();} numberMotors += m_right.size();}
+    if (side <= 0) {for (int i = 0; i < m_left.size() - 1; i++) {rpm += m_left[i]->get_actual_velocity();} numberMotors += (m_left.size() - 1);}
+    if (side >= 0) {for (int i = 0; i < m_right.size() - 1; i++) {rpm += m_right[i]->get_actual_velocity();} numberMotors += (m_right.size() - 1);}
     rpm /= numberMotors;
 
 	double cvel = ((rpm * 0.75 * (M_PI * 3.25)) / 60);
-	double p =  0.05 * (velocity - cvel);
+	double p =  0.2 * (velocity - rpm);
 
+    double icvel = ((velocity * 0.75 * (M_PI * 3.25)) / 60);
+
+    double ff = ((velocity >= 0 ? 1 : -1) * 9) + (0.16 * velocity) + (0.02 * ((icvel - (side >= 0 ? prevRVelo : prevLVelo)) / ((pros::millis() - (side >= 0 ? RAccelTimer : LAccelTimer)) / 1000.0)));
+
+    // if (side >= 0) {std::cout << "(" << pros::millis() / 100 << ", " << ((ff * 60.0) / (M_PI * 3.25) / 0.75) / 10.0 << "), ";}
+    // if (side >= 0) {std::cout << "(" << pros::millis() / 100.0 << ", " << ((cvel - (side >= 0 ? prevRVelo : prevLVelo)) / ((pros::millis() - (side >= 0 ? RAccelTimer : LAccelTimer)) / 1000)) << "), ";}
+
+    // std::cout << "(" << ff << ", " << p << ")\n";
 	double final = std::min(std::max(-127.0, (ff + p)), 127.0);
+
+    if (side >= 0) {
+        prevRVelo = cvel;
+        RAccelTimer = pros::millis();
+    } else {
+        prevLVelo = cvel;
+        LAccelTimer = pros::millis();
+    }
 	return final;
 }
 
